@@ -13,18 +13,48 @@ import (
 const (
 	geckoDriverPath = "/usr/bin/geckodriver"
 	port            = 4444
-	wireLoginURL    = "https://app.wire.com/auth/#login"
 )
 
-func wireLogin(webDriver selenium.WebDriver, username, password string) (
-	err error) {
+type WireApp struct {
+	webDriver selenium.WebDriver
+	username  string
+	password  string
+}
 
-	err = webDriver.Get(wireLoginURL)
+func NewWireApp(webDriver selenium.WebDriver, username, password string) (
+	wa *WireApp, err error) {
+
+	if username == "" || password == "" {
+		err = fmt.Errorf("username or password is not set properly")
+		return
+	}
+
+	wa = &WireApp{
+		webDriver: webDriver,
+		username:  username,
+		password:  password}
+
+	if err = wa.login(); err != nil {
+		err = fmt.Errorf("login error: %s", err.Error())
+		return
+	}
+
+	if err = wa.pagesAfterLogin(); err != nil {
+		err = fmt.Errorf("pages after login error: %s", err.Error())
+		return
+	}
+
+	return wa, nil
+}
+
+func (wa *WireApp) login() (err error) {
+
+	err = wa.webDriver.Get("https://app.wire.com/auth/#login")
 	if err != nil {
 		return
 	}
 
-	element, err := webDriver.FindElement("xpath", "//input[@name='email']")
+	element, err := wa.webDriver.FindElement("xpath", "//input[@name='email']")
 	if err != nil {
 		return
 	}
@@ -34,12 +64,13 @@ func wireLogin(webDriver selenium.WebDriver, username, password string) (
 		return
 	}
 
-	err = element.SendKeys(username)
+	err = element.SendKeys(wa.username)
 	if err != nil {
 		return
 	}
 
-	element, err = webDriver.FindElement("xpath", "//input[@name='password']")
+	element, err = wa.webDriver.FindElement("xpath",
+		"//input[@name='password']")
 	if err != nil {
 		return
 	}
@@ -49,12 +80,13 @@ func wireLogin(webDriver selenium.WebDriver, username, password string) (
 		return
 	}
 
-	err = element.SendKeys(password)
+	err = element.SendKeys(wa.password)
 	if err != nil {
 		return
 	}
 
-	element, err = webDriver.FindElement("xpath", "//button[@type='submit']")
+	element, err = wa.webDriver.FindElement("xpath",
+		"//button[@type='submit']")
 	if err != nil {
 		return
 	}
@@ -67,13 +99,38 @@ func wireLogin(webDriver selenium.WebDriver, username, password string) (
 	return nil
 }
 
-func wireRemoveClient(webDriver selenium.WebDriver, password string) (
-	err error) {
+func (wa *WireApp) pagesAfterLogin() (err error) {
+	for {
+		time.Sleep(100 * time.Millisecond)
 
-	err = webDriver.WaitWithTimeout(func(wd selenium.WebDriver) (
+		url, err := wa.webDriver.CurrentURL()
+		if err != nil {
+			return nil
+		}
+
+		log.Printf("url = %s", url)
+
+		switch url {
+		case "https://app.wire.com/auth/#clients":
+			wa.pageAuthClients()
+		case "https://app.wire.com/auth/#historyinfo":
+			wa.pageAuthhistoryInfo()
+		case "https://app.wire.com/auth/#login":
+			continue
+		case "https://app.wire.com/":
+			return nil
+		default:
+			log.Fatalf("Unrecognized url: %s", url)
+		}
+	}
+}
+
+func (wa *WireApp) pageAuthClients() (err error) {
+
+	err = wa.webDriver.WaitWithTimeout(func(wd selenium.WebDriver) (
 		success bool, err error) {
 
-		element, err := webDriver.FindElement("xpath",
+		element, err := wa.webDriver.FindElement("xpath",
 			"//div[@data-uie-name='go-remove-device']")
 		log.Printf("%v %v", err != nil, element)
 		return err == nil && element != nil, nil
@@ -83,7 +140,7 @@ func wireRemoveClient(webDriver selenium.WebDriver, password string) (
 		return
 	}
 
-	element, err := webDriver.FindElement("xpath",
+	element, err := wa.webDriver.FindElement("xpath",
 		"//div[@data-uie-name='go-remove-device']")
 	if err != nil {
 		return
@@ -91,23 +148,25 @@ func wireRemoveClient(webDriver selenium.WebDriver, password string) (
 
 	element.Click()
 
-	element, err = webDriver.FindElement("xpath", "//input[@name='password']")
+	element, err = wa.webDriver.FindElement("xpath",
+		"//input[@name='password']")
+
 	if err != nil {
 		return
 	}
 
 	element.Click()
-	element.SendKeys(password)
+	element.SendKeys(wa.password)
 	element.SendKeys(selenium.EnterKey)
 
 	return nil
 }
 
-func wireHistoryInfo(webDriver selenium.WebDriver) (err error) {
-	err = webDriver.WaitWithTimeout(func(wd selenium.WebDriver) (
+func (wa *WireApp) pageAuthhistoryInfo() (err error) {
+	err = wa.webDriver.WaitWithTimeout(func(wd selenium.WebDriver) (
 		success bool, err error) {
 
-		element, err := webDriver.FindElement("xpath",
+		element, err := wa.webDriver.FindElement("xpath",
 			"//button[@data-uie-name='do-history-confirm']")
 		log.Printf("%v %v", err != nil, element)
 		return err == nil && element != nil, nil
@@ -117,7 +176,7 @@ func wireHistoryInfo(webDriver selenium.WebDriver) (err error) {
 		return
 	}
 
-	element, err := webDriver.FindElement("xpath",
+	element, err := wa.webDriver.FindElement("xpath",
 		"//button[@data-uie-name='do-history-confirm']")
 	if err != nil {
 		return
@@ -130,15 +189,14 @@ func wireHistoryInfo(webDriver selenium.WebDriver) (err error) {
 
 func main() {
 	caps := selenium.Capabilities{"browserName": "firefox"}
-	var err error
-	var webDriver selenium.WebDriver
-	webDriver, err = selenium.NewRemote(caps,
+	webDriver, err := selenium.NewRemote(caps,
 		fmt.Sprintf("http://localhost:%d", port))
 
 	if err != nil {
 		log.Printf(err.Error())
 		return
 	}
+	defer webDriver.Quit()
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
@@ -151,40 +209,13 @@ func main() {
 		os.Exit(0)
 	}()
 
-	defer webDriver.Quit()
-
 	username := os.Getenv("WIRE_BOT_USERNAME")
 	password := os.Getenv("WIRE_BOT_PASSWORD")
 
-	err = wireLogin(webDriver, username, password)
+	_, err = NewWireApp(webDriver, username, password)
+
 	if err != nil {
-		log.Printf("wireLogin error: %s", err.Error())
-		return
-
+		panic(err)
 	}
 
-	for {
-		var url string
-		url, err = webDriver.CurrentURL()
-		if err != nil {
-			panic(err)
-		}
-
-		log.Printf("url = %s", url)
-
-		switch url {
-		case "https://app.wire.com/auth/#clients":
-			wireRemoveClient(webDriver, password)
-		case "https://app.wire.com/auth/#historyinfo":
-			wireHistoryInfo(webDriver)
-		case "https://app.wire.com/auth/#login":
-			continue
-		case "https://app.wire.com/":
-			log.Printf("You made it!")
-			time.Sleep(5 * time.Second)
-			return
-		default:
-			log.Fatalf("Unrecognized url: %s", url)
-		}
-	}
 }
