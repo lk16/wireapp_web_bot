@@ -215,8 +215,8 @@ func (conv *Conversation) SendMessage(message string) (err error) {
 		return
 	}
 
-	textArea, err := conv.wireapp.webDriver.FindElement("xpath",
-		"//textarea[@id='conversation-input-bar-text']")
+	textArea, err := waitForElementXPath(conv.wireapp.webDriver,
+		"//textarea[@id='conversation-input-bar-text']", 5*time.Second)
 	if err != nil {
 		return
 	}
