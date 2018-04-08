@@ -93,48 +93,54 @@ func (wa *WireApp) login() (err error) {
 }
 
 func (wa *WireApp) pagesAfterLogin() (err error) {
+
+	previousURL := ""
+
 	for {
 		time.Sleep(100 * time.Millisecond)
 
-		url, err := wa.webDriver.CurrentURL()
+		var URL string
+		URL, err = wa.webDriver.CurrentURL()
 		if err != nil {
 			return nil
 		}
 
-		log.Printf("url = %s", url)
+		if URL != previousURL {
+			log.Printf("url = %s", URL)
+		}
 
-		switch url {
+		previousURL = URL
+
+		// TODO use error return values in switch
+
+		switch URL {
 		case "https://app.wire.com/auth/#clients":
-			wa.pageAuthClients()
+			err = wa.pageAuthClients()
 		case "https://app.wire.com/auth/#historyinfo":
-			wa.pageAuthhistoryInfo()
+			err = wa.pageAuthHistoryInfo()
 		case "https://app.wire.com/auth/#login":
 			continue
 		case "https://app.wire.com/":
 			return nil
 		default:
-			log.Fatalf("Unrecognized url: %s", url)
+			log.Fatalf("Unrecognized url: %s", URL)
+		}
+		if err != nil {
+			switch err.(type) {
+			case ChangedURLError:
+				continue
+			default:
+				return
+			}
 		}
 	}
 }
 
 func (wa *WireApp) pageAuthClients() (err error) {
 
-	err = wa.webDriver.WaitWithTimeout(func(wd selenium.WebDriver) (
-		success bool, err error) {
+	element, err := waitForElementXPath(wa.webDriver,
+		"//div[@data-uie-name='go-remove-device']", 5*time.Second)
 
-		element, err := wa.webDriver.FindElement("xpath",
-			"//div[@data-uie-name='go-remove-device']")
-		log.Printf("%v %v", err != nil, element)
-		return err == nil && element != nil, nil
-	}, 5*time.Second)
-
-	if err != nil {
-		return
-	}
-
-	element, err := wa.webDriver.FindElement("xpath",
-		"//div[@data-uie-name='go-remove-device']")
 	if err != nil {
 		return
 	}
@@ -155,22 +161,11 @@ func (wa *WireApp) pageAuthClients() (err error) {
 	return nil
 }
 
-func (wa *WireApp) pageAuthhistoryInfo() (err error) {
-	err = wa.webDriver.WaitWithTimeout(func(wd selenium.WebDriver) (
-		success bool, err error) {
+func (wa *WireApp) pageAuthHistoryInfo() (err error) {
 
-		element, err := wa.webDriver.FindElement("xpath",
-			"//button[@data-uie-name='do-history-confirm']")
-		log.Printf("%v %v", err != nil, element)
-		return err == nil && element != nil, nil
-	}, 5*time.Second)
+	element, err := waitForElementXPath(wa.webDriver,
+		"//button[@data-uie-name='do-history-confirm']", 5*time.Second)
 
-	if err != nil {
-		return
-	}
-
-	element, err := wa.webDriver.FindElement("xpath",
-		"//button[@data-uie-name='do-history-confirm']")
 	if err != nil {
 		return
 	}
@@ -178,4 +173,96 @@ func (wa *WireApp) pageAuthhistoryInfo() (err error) {
 	element.Click()
 
 	return nil
+}
+
+type Conversation struct {
+	element selenium.WebElement
+	wireapp *WireApp
+}
+
+func (conv *Conversation) GetName() (name string, err error) {
+	return conv.element.GetAttribute("data-uie-value")
+}
+
+func (conv *Conversation) SendMessage(message string) (err error) {
+	element, err := conv.element.FindElement("xpath",
+		"//div[@class='conversation-list-cell-center']")
+
+	if err != nil {
+		return
+	}
+
+	element.Click()
+
+	textArea, err := conv.wireapp.webDriver.FindElement("xpath",
+		"//textarea[@id='conversation-input-bar-text']")
+
+	if err != nil {
+		return
+	}
+
+	textArea.Click()
+	textArea.SendKeys(message)
+	textArea.SendKeys(selenium.EnterKey)
+
+	return
+}
+
+func (wa *WireApp) ListConversations() (
+	conversations []*Conversation, err error) {
+
+	URL, err := wa.webDriver.CurrentURL()
+	if err != nil {
+		return
+	}
+
+	if URL != "https://app.wire.com/" {
+		err = fmt.Errorf("Invalid URL: %s", URL)
+		return
+	}
+
+	elements, err := wa.webDriver.FindElements("xpath",
+		"//conversation-list-cell/div[contains(@class,"+
+			"'conversation-list-cell')]")
+
+	if err != nil {
+		return
+	}
+
+	conversations = make([]*Conversation, len(elements))
+
+	for i, element := range elements {
+		conversations[i] = &Conversation{
+			element: element,
+			wireapp: wa}
+	}
+
+	return
+}
+
+func (wa *WireApp) FindConversation(targetName string) (
+	conversation *Conversation, err error) {
+
+	var conversations []*Conversation
+	conversations, err = wa.ListConversations()
+	if err != nil {
+		return
+	}
+
+	for _, conversation := range conversations {
+
+		var name string
+		name, err = conversation.GetName()
+
+		if err != nil {
+			return nil, err
+		}
+
+		if name == targetName {
+			return conversation, err
+		}
+	}
+
+	err = fmt.Errorf("conversation not found")
+	return
 }
