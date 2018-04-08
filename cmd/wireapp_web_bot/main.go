@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/lk16/wireapp_web_bot"
 	"github.com/tebeka/selenium"
+	"github.com/tebeka/selenium/firefox"
 	"log"
 	"os"
 	"os/signal"
@@ -32,14 +34,19 @@ func main() {
 	var topic string
 	flag.StringVar(&topic, "topic", "", "Wireapp conversation topic")
 
-	var message string
-	flag.StringVar(&message, "msg", "", "Single message to be posted")
+	var headless bool
+	flag.BoolVar(&headless, "headless", false, "Run headless mode")
 
 	flag.Parse()
 
 	seleniumRemote := fmt.Sprintf("http://%s:%d", seleniumHost, seleniumPort)
 
-	var capabilities map[string]interface{}
+	capabilities := selenium.Capabilities{}
+
+	if headless {
+		capabilities.AddFirefox(firefox.Capabilities{
+			Args: []string{"-headless"}})
+	}
 
 	err := json.Unmarshal([]byte(capabilitiesRaw), &capabilities)
 	if err != nil {
@@ -83,8 +90,15 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
-	err = conversation.SendMessage(message)
-	if err != nil {
-		log.Fatalf(err.Error())
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		message := scanner.Text()
+		err = conversation.SendMessage(message)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
 	}
+
+	time.Sleep(2 * time.Second)
+	log.Printf("main() returns")
 }
