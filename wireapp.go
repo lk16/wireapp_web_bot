@@ -1,18 +1,11 @@
-package main
+package wireapp
 
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 	"time"
 
 	"github.com/tebeka/selenium"
-)
-
-const (
-	geckoDriverPath = "/usr/bin/geckodriver"
-	port            = 4444
 )
 
 type WireApp struct {
@@ -185,37 +178,4 @@ func (wa *WireApp) pageAuthhistoryInfo() (err error) {
 	element.Click()
 
 	return nil
-}
-
-func main() {
-	caps := selenium.Capabilities{"browserName": "firefox"}
-	webDriver, err := selenium.NewRemote(caps,
-		fmt.Sprintf("http://localhost:%d", port))
-
-	if err != nil {
-		log.Printf(err.Error())
-		return
-	}
-	defer webDriver.Quit()
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	go func() {
-		<-signalChan
-		log.Printf("Received interrupt")
-		webDriver.Quit()
-		log.Printf("Calling os.Exit(0)")
-		os.Exit(0)
-	}()
-
-	username := os.Getenv("WIRE_BOT_USERNAME")
-	password := os.Getenv("WIRE_BOT_PASSWORD")
-
-	_, err = NewWireApp(webDriver, username, password)
-
-	if err != nil {
-		panic(err)
-	}
-
 }
