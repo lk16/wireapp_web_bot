@@ -3,6 +3,12 @@
 WireApp Web Bot
 ======
 
+Linter
+--
+```
+gometalinter --enable-all --disable=goimports --disable=gofmt ./...
+```
+
 TODO list:
 --
 - sending one message via cli

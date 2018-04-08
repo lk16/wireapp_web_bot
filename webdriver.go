@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// ChangedURLError indicates the URL changed unexpectedly
 type ChangedURLError string
 
 func (err ChangedURLError) Error() string {
@@ -38,5 +39,5 @@ func waitForElementXPath(webDriver selenium.WebDriver, xpath string,
 	}
 
 	err = webDriver.WaitWithTimeout(condition, duration)
-	return
+	return element, err
 }

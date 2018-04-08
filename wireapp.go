@@ -8,12 +8,14 @@ import (
 	"github.com/tebeka/selenium"
 )
 
+// WireApp represents a wireapp session
 type WireApp struct {
 	webDriver selenium.WebDriver
 	username  string
 	password  string
 }
 
+// NewWireApp creats a new WireApp
 func NewWireApp(webDriver selenium.WebDriver, username, password string) (
 	wa *WireApp, err error) {
 
@@ -140,23 +142,35 @@ func (wa *WireApp) pageAuthClients() (err error) {
 
 	element, err := waitForElementXPath(wa.webDriver,
 		"//div[@data-uie-name='go-remove-device']", 5*time.Second)
-
 	if err != nil {
 		return
 	}
 
-	element.Click()
+	err = element.Click()
+	if err != nil {
+		return
+	}
 
 	element, err = wa.webDriver.FindElement("xpath",
 		"//input[@name='password']")
-
 	if err != nil {
 		return
 	}
 
-	element.Click()
-	element.SendKeys(wa.password)
-	element.SendKeys(selenium.EnterKey)
+	err = element.Click()
+	if err != nil {
+		return
+	}
+
+	err = element.SendKeys(wa.password)
+	if err != nil {
+		return
+	}
+
+	err = element.SendKeys(selenium.EnterKey)
+	if err != nil {
+		return
+	}
 
 	return nil
 }
@@ -165,49 +179,67 @@ func (wa *WireApp) pageAuthHistoryInfo() (err error) {
 
 	element, err := waitForElementXPath(wa.webDriver,
 		"//button[@data-uie-name='do-history-confirm']", 5*time.Second)
-
 	if err != nil {
 		return
 	}
 
-	element.Click()
+	err = element.Click()
+	if err != nil {
+		return
+	}
 
 	return nil
 }
 
+// Conversation represents a wireapp conversation
 type Conversation struct {
 	element selenium.WebElement
 	wireapp *WireApp
 }
 
-func (conv *Conversation) GetName() (name string, err error) {
+// GetTopic gets the topic of a Conversation
+func (conv *Conversation) GetTopic() (name string, err error) {
 	return conv.element.GetAttribute("data-uie-value")
 }
 
+// SendMessage sends a message in a Conversation
 func (conv *Conversation) SendMessage(message string) (err error) {
 	element, err := conv.element.FindElement("xpath",
 		"//div[@class='conversation-list-cell-center']")
-
 	if err != nil {
 		return
 	}
 
-	element.Click()
+	err = element.Click()
+	if err != nil {
+		return
+	}
 
 	textArea, err := conv.wireapp.webDriver.FindElement("xpath",
 		"//textarea[@id='conversation-input-bar-text']")
-
 	if err != nil {
 		return
 	}
 
-	textArea.Click()
-	textArea.SendKeys(message)
-	textArea.SendKeys(selenium.EnterKey)
+	err = textArea.Click()
+	if err != nil {
+		return
+	}
 
-	return
+	err = textArea.SendKeys(message)
+	if err != nil {
+		return
+	}
+
+	err = textArea.SendKeys(selenium.EnterKey)
+	if err != nil {
+		return
+	}
+
+	return err
 }
 
+// ListConversations lists each Conversation
 func (wa *WireApp) ListConversations() (
 	conversations []*Conversation, err error) {
 
@@ -221,9 +253,15 @@ func (wa *WireApp) ListConversations() (
 		return
 	}
 
-	elements, err := wa.webDriver.FindElements("xpath",
-		"//conversation-list-cell/div[contains(@class,"+
-			"'conversation-list-cell')]")
+	xpath := "//conversation-list-cell/div[contains(@class," +
+		"'conversation-list-cell')]"
+
+	_, err = waitForElementXPath(wa.webDriver, xpath, 5*time.Second)
+	if err != nil {
+		return
+	}
+
+	elements, err := wa.webDriver.FindElements("xpath", xpath)
 
 	if err != nil {
 		return
@@ -237,10 +275,11 @@ func (wa *WireApp) ListConversations() (
 			wireapp: wa}
 	}
 
-	return
+	return conversations, nil
 }
 
-func (wa *WireApp) FindConversation(targetName string) (
+// FindConversation finds a Conversation by topic
+func (wa *WireApp) FindConversation(targetTopic string) (
 	conversation *Conversation, err error) {
 
 	var conversations []*Conversation
@@ -251,18 +290,18 @@ func (wa *WireApp) FindConversation(targetName string) (
 
 	for _, conversation := range conversations {
 
-		var name string
-		name, err = conversation.GetName()
+		var topic string
+		topic, err = conversation.GetTopic()
 
 		if err != nil {
 			return nil, err
 		}
 
-		if name == targetName {
+		if topic == targetTopic {
 			return conversation, err
 		}
 	}
 
 	err = fmt.Errorf("conversation not found")
-	return
+	return nil, err
 }

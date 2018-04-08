@@ -9,10 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
-)
-
-const (
-	port = 4444
+	"time"
 )
 
 func main() {
@@ -27,10 +24,16 @@ func main() {
 	flag.IntVar(&seleniumPort, "port", 4444, "Selenium port")
 
 	var username string
-	flag.StringVar(&username, "username", "", "Wireapp username")
+	flag.StringVar(&username, "user", "", "Wireapp username")
 
 	var password string
-	flag.StringVar(&password, "password", "", "Wireapp password")
+	flag.StringVar(&password, "pass", "", "Wireapp password")
+
+	var topic string
+	flag.StringVar(&topic, "topic", "", "Wireapp conversation topic")
+
+	var message string
+	flag.StringVar(&message, "msg", "", "Single message to be posted")
 
 	flag.Parse()
 
@@ -48,7 +51,12 @@ func main() {
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
-	defer webDriver.Quit()
+	defer func() {
+		err = webDriver.Quit()
+		if err != nil {
+			return
+		}
+	}()
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
@@ -56,16 +64,27 @@ func main() {
 	go func() {
 		<-signalChan
 		log.Printf("Received interrupt")
-		webDriver.Quit()
+		err = webDriver.Quit()
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
 		log.Printf("Calling os.Exit(0)")
 		os.Exit(0)
 	}()
 
-	_, err = wireapp.NewWireApp(webDriver, username, password)
+	wa, err := wireapp.NewWireApp(webDriver, username, password)
 
 	if err != nil {
-		webDriver.Quit()
 		log.Fatalf(err.Error())
 	}
 
+	conversation, err := wa.FindConversation(topic)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	err = conversation.SendMessage(message)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
 }
