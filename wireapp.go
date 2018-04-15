@@ -8,6 +8,10 @@ import (
 	"github.com/tebeka/selenium"
 )
 
+const (
+	wireRootURL = "https://app.wire.com/"
+)
+
 // WireApp represents a wireapp session
 type WireApp struct {
 	webDriver selenium.WebDriver
@@ -44,7 +48,7 @@ func NewWireApp(webDriver selenium.WebDriver, username, password string) (
 
 func (wa *WireApp) login() (err error) {
 
-	err = wa.webDriver.Get("https://app.wire.com/auth/#login")
+	err = wa.webDriver.Get(wireRootURL + "auth/#login")
 	if err != nil {
 		return
 	}
@@ -117,13 +121,13 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 		// TODO use error return values in switch
 
 		switch URL {
-		case "https://app.wire.com/auth/#clients":
+		case wireRootURL + "auth/#clients":
 			err = wa.pageAuthClients()
-		case "https://app.wire.com/auth/#historyinfo":
+		case wireRootURL + "auth/#historyinfo":
 			err = wa.pageAuthHistoryInfo()
-		case "https://app.wire.com/auth/#login":
+		case wireRootURL + "auth/#login":
 			continue
-		case "https://app.wire.com/":
+		case wireRootURL:
 			_, err = wa.webDriver.ExecuteScript(
 				"document.getElementById('warnings').remove();",
 				[]interface{}{})
@@ -209,7 +213,7 @@ func (conv *Conversation) GetTopic() (name string, err error) {
 		return
 	}
 
-	if URL != "https://app.wire.com/" {
+	if URL != wireRootURL {
 		err = fmt.Errorf("Unexpected URL: '%s'", URL)
 		return
 	}
@@ -287,7 +291,7 @@ func (wa *WireApp) ListConversations() (
 		return
 	}
 
-	if URL != "https://app.wire.com/" {
+	if URL != wireRootURL {
 		err = fmt.Errorf("Invalid URL: %s", URL)
 		return
 	}

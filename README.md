@@ -41,7 +41,6 @@ Development details
 
 TODO list:
 --
-- fix bug with "allow notifications" pop up
 - use  https://github.com/pkg/errors
 - implement config file
 - implement sending files
