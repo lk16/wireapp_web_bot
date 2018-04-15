@@ -124,7 +124,10 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 		case "https://app.wire.com/auth/#login":
 			continue
 		case "https://app.wire.com/":
-			return nil
+			_, err = wa.webDriver.ExecuteScript(
+				"document.getElementById('warnings').remove();",
+				[]interface{}{})
+			return err
 		default:
 			log.Fatalf("Unrecognized url: %s", URL)
 		}
