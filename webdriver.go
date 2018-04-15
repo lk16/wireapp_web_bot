@@ -2,6 +2,7 @@ package wireapp
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/tebeka/selenium"
 	"time"
 )
@@ -18,6 +19,7 @@ func waitForElementXPath(webDriver selenium.WebDriver, xpath string,
 
 	expectedURL, err := webDriver.CurrentURL()
 	if err != nil {
+		err = errors.Wrap(err, "could not get current url")
 		return
 	}
 
@@ -25,6 +27,7 @@ func waitForElementXPath(webDriver selenium.WebDriver, xpath string,
 
 		URL, err := webDriver.CurrentURL()
 		if err != nil {
+			err = errors.Wrap(err, "could not get current url")
 			return
 		}
 

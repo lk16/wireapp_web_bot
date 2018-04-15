@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/tebeka/selenium"
 )
 
@@ -21,79 +22,79 @@ type WireApp struct {
 
 // NewWireApp creats a new WireApp
 func NewWireApp(webDriver selenium.WebDriver, username, password string) (
-	wa *WireApp, err error) {
+	wireapp *WireApp, err error) {
 
 	if username == "" || password == "" {
 		err = fmt.Errorf("username or password is not set properly")
 		return
 	}
 
-	wa = &WireApp{
+	wireapp = &WireApp{
 		webDriver: webDriver,
 		username:  username,
 		password:  password}
 
-	if err = wa.login(); err != nil {
-		err = fmt.Errorf("login error: %s", err.Error())
+	if err = wireapp.login(); err != nil {
+		err = errors.Wrap(err, "login error")
 		return
 	}
 
-	if err = wa.pagesAfterLogin(); err != nil {
-		err = fmt.Errorf("pages after login error: %s", err.Error())
+	if err = wireapp.pagesAfterLogin(); err != nil {
+		err = errors.Wrap(err, "browsing error")
 		return
 	}
 
-	return wa, nil
+	return wireapp, nil
 }
 
 func (wa *WireApp) login() (err error) {
 
 	err = wa.webDriver.Get(wireRootURL + "auth/#login")
 	if err != nil {
-		return
+		return errors.Wrap(err, "getting login url failed")
 	}
 
 	element, err := waitForElementXPath(wa.webDriver, "//input[@name='email']",
 		5*time.Second)
 	if err != nil {
-		return
+		return errors.Wrapf(err, "could not find email field")
 	}
 
 	err = element.Clear()
 	if err != nil {
-		return
+		return errors.Wrapf(err, "could not clear email field")
 	}
 
 	err = element.SendKeys(wa.username)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not send email keystrokes")
 	}
 
 	element, err = wa.webDriver.FindElement("xpath",
 		"//input[@name='password']")
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not find password field")
 	}
 
 	err = element.Clear()
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not clear password field")
 	}
 
 	err = element.SendKeys(wa.password)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not send password keystrokes")
 	}
 
 	element, err = wa.webDriver.FindElement("xpath",
 		"//button[@type='submit']")
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not find submit button")
 	}
 
 	err = element.Click()
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not click on submit button")
 	}
 
 	return nil
@@ -109,7 +110,7 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 		var URL string
 		URL, err = wa.webDriver.CurrentURL()
 		if err != nil {
-			return nil
+			return errors.Wrap(err, "could not get current URL")
 		}
 
 		if URL != previousURL {
@@ -123,6 +124,15 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 		switch URL {
 		case wireRootURL + "auth/#clients":
 			err = wa.pageAuthClients()
+			if err != nil {
+				switch errors.Cause(err).(type) {
+				case ChangedURLError:
+					err = nil
+					break
+				default:
+					log.Printf("error cause has type %T", errors.Cause(err))
+				}
+			}
 		case wireRootURL + "auth/#historyinfo":
 			err = wa.pageAuthHistoryInfo()
 		case wireRootURL + "auth/#login":
@@ -131,17 +141,12 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 			_, err = wa.webDriver.ExecuteScript(
 				"document.getElementById('warnings').remove();",
 				[]interface{}{})
-			return err
+			return errors.Wrap(err, "could not remove warnings div")
 		default:
-			log.Fatalf("Unrecognized url: %s", URL)
+			errors.Wrapf(err, "unrecognized url %s", URL)
 		}
 		if err != nil {
-			switch err.(type) {
-			case ChangedURLError:
-				continue
-			default:
-				return
-			}
+			return errors.Wrapf(err, "browsing %s failed", URL)
 		}
 	}
 }
@@ -151,33 +156,33 @@ func (wa *WireApp) pageAuthClients() (err error) {
 	element, err := waitForElementXPath(wa.webDriver,
 		"//div[@data-uie-name='go-remove-device']", 5*time.Second)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not find remove device div")
 	}
 
 	err = element.Click()
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not click remove device div")
 	}
 
 	element, err = wa.webDriver.FindElement("xpath",
 		"//input[@name='password']")
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not find password field")
 	}
 
 	err = element.Click()
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not click password field")
 	}
 
 	err = element.SendKeys(wa.password)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not send password keystrokes")
 	}
 
 	err = element.SendKeys(selenium.EnterKey)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not send enter keystroke")
 	}
 
 	return nil
@@ -188,12 +193,12 @@ func (wa *WireApp) pageAuthHistoryInfo() (err error) {
 	element, err := waitForElementXPath(wa.webDriver,
 		"//button[@data-uie-name='do-history-confirm']", 5*time.Second)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not find history confirm button")
 	}
 
 	err = element.Click()
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not click history confirm button")
 	}
 
 	return nil
@@ -210,11 +215,12 @@ func (conv *Conversation) GetTopic() (name string, err error) {
 
 	URL, err := conv.wireapp.webDriver.CurrentURL()
 	if err != nil {
+		err = errors.Wrap(err, "could not get current URL")
 		return
 	}
 
 	if URL != wireRootURL {
-		err = fmt.Errorf("Unexpected URL: '%s'", URL)
+		err = errors.Wrapf(err, "Unexpected URL: '%s'", URL)
 		return
 	}
 
@@ -222,10 +228,18 @@ func (conv *Conversation) GetTopic() (name string, err error) {
 	element, err := conv.wireapp.webDriver.FindElement("xpath", xpath)
 
 	if err != nil {
+		err = errors.Wrap(err, "could not find div for conversation")
 		return
 	}
 
-	return element.GetAttribute("data-uie-value")
+	name, err = element.GetAttribute("data-uie-value")
+	if err != nil {
+		err = errors.Wrap(err,
+			"could not get topic atrribute from conversation div")
+		return
+	}
+
+	return name, nil
 }
 
 // SendMessage sends a message in a Conversation
@@ -234,12 +248,13 @@ func (conv *Conversation) SendMessage(message string) (err error) {
 	xpath := fmt.Sprintf("//div[@data-uie-uid='%s']", conv.uuid)
 	element, err := conv.wireapp.webDriver.FindElement("xpath", xpath)
 	if err != nil {
-		return
+		return errors.Wrap(err,
+			"could not find topic attribute from conversation div")
 	}
 
 	err = element.Click()
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not click conversation div")
 	}
 
 	condition := func(wd selenium.WebDriver) (success bool, err error) {
@@ -247,39 +262,36 @@ func (conv *Conversation) SendMessage(message string) (err error) {
 		xpath := fmt.Sprintf("//div[@data-uie-uid='%s' and "+
 			"contains(@class,'conversation-list-cell-active')]", conv.uuid)
 		element, err = conv.wireapp.webDriver.FindElement("xpath", xpath)
-		if err != nil {
-			log.Printf(err.Error())
-		}
 		return err == nil && element != nil, nil
 	}
 
 	err = conv.wireapp.webDriver.WaitWithTimeout(condition, 5*time.Second)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not switch conversation")
 	}
 
 	element, err = waitForElementXPath(conv.wireapp.webDriver,
 		"//textarea[@id='conversation-input-bar-text']", 5*time.Second)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not find message textarea")
 	}
 
 	err = element.Click()
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not click message textarea")
 	}
 
 	err = element.SendKeys(message)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not send message keystrokes")
 	}
 
 	err = element.SendKeys(selenium.EnterKey)
 	if err != nil {
-		return
+		return errors.Wrap(err, "could not send enter keystroke")
 	}
 
-	return err
+	return nil
 }
 
 // ListConversations lists each Conversation
@@ -288,6 +300,7 @@ func (wa *WireApp) ListConversations() (
 
 	URL, err := wa.webDriver.CurrentURL()
 	if err != nil {
+		err = errors.Wrap(err, "could not get current URL")
 		return
 	}
 
@@ -301,12 +314,13 @@ func (wa *WireApp) ListConversations() (
 
 	_, err = waitForElementXPath(wa.webDriver, xpath, 5*time.Second)
 	if err != nil {
+		err = errors.Wrap(err, "could not find any conversation")
 		return
 	}
 
 	elements, err := wa.webDriver.FindElements("xpath", xpath)
-
 	if err != nil {
+		err = errors.Wrap(err, "could not list any conversations")
 		return
 	}
 
@@ -316,6 +330,8 @@ func (wa *WireApp) ListConversations() (
 		conversations[i] = &Conversation{wireapp: wa}
 		conversations[i].uuid, err = element.GetAttribute("data-uie-uid")
 		if err != nil {
+			err = errors.Wrap(err,
+				"could not get uuid attribute of conversation")
 			return
 		}
 	}
@@ -330,6 +346,7 @@ func (wa *WireApp) FindConversation(targetTopic string) (
 	var conversations []*Conversation
 	conversations, err = wa.ListConversations()
 	if err != nil {
+		err = errors.Wrap(err, "could not list all conversations")
 		return
 	}
 
@@ -339,6 +356,7 @@ func (wa *WireApp) FindConversation(targetTopic string) (
 		topic, err = conversation.GetTopic()
 
 		if err != nil {
+			err = errors.Wrap(err, "could not get topic of conversation")
 			return nil, err
 		}
 
@@ -347,6 +365,6 @@ func (wa *WireApp) FindConversation(targetTopic string) (
 		}
 	}
 
-	err = fmt.Errorf("conversation not found")
+	err = errors.Wrap(err, "could not find conversation")
 	return nil, err
 }

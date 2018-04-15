@@ -41,7 +41,8 @@ Development details
 
 TODO list:
 --
-- use  https://github.com/pkg/errors
+- use  https://github.com/pkg/errors better
+- buffer posting messages for x seconds
 - implement config file
 - implement sending files
 - implement interaction with sent messages
