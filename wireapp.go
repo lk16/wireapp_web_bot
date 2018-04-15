@@ -119,8 +119,6 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 
 		previousURL = URL
 
-		// TODO use error return values in switch
-
 		switch URL {
 		case wireRootURL + "auth/#clients":
 			err = wa.pageAuthClients()
@@ -128,7 +126,6 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 				switch errors.Cause(err).(type) {
 				case ChangedURLError:
 					err = nil
-					break
 				default:
 					log.Printf("error cause has type %T", errors.Cause(err))
 				}
@@ -143,7 +140,7 @@ func (wa *WireApp) pagesAfterLogin() (err error) {
 				[]interface{}{})
 			return errors.Wrap(err, "could not remove warnings div")
 		default:
-			errors.Wrapf(err, "unrecognized url %s", URL)
+			return errors.Wrapf(err, "unrecognized url %s", URL)
 		}
 		if err != nil {
 			return errors.Wrapf(err, "browsing %s failed", URL)
