@@ -4,8 +4,8 @@ WireApp Web Bot
 ======
 
 This package consists of two parts:
-- A golang implementation to control a WireApp account with selenium
-- A command line tool based on top of that library
+- An API to control a WireApp account with selenium
+- A command line tool based on that API
 
 
 Installation
@@ -36,20 +36,18 @@ echo "hello world" | wireapp_web_bot -user 'wireapp_user' -pass 'wireapp_passwor
 cat myfile | wireapp_web_bot -user 'wireapp_user' -pass 'wireapp_password' -topic 'chat_topic' 2>>wireapp.log
 ```
 
-
-
 Development details
 ===
 
 TODO list:
 --
-- fix bug changing conversations
 - fix bug with "allow notifications" pop up
 - use  https://github.com/pkg/errors
 - implement config file
 - implement sending files
 - implement interaction with sent messages
 - write usage and other stuff in this file
+
 
 Linter
 --

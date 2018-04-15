@@ -49,7 +49,8 @@ func (wa *WireApp) login() (err error) {
 		return
 	}
 
-	element, err := wa.webDriver.FindElement("xpath", "//input[@name='email']")
+	element, err := waitForElementXPath(wa.webDriver, "//input[@name='email']",
+		5*time.Second)
 	if err != nil {
 		return
 	}
@@ -193,19 +194,38 @@ func (wa *WireApp) pageAuthHistoryInfo() (err error) {
 
 // Conversation represents a wireapp conversation
 type Conversation struct {
-	element selenium.WebElement
+	uuid    string
 	wireapp *WireApp
 }
 
 // GetTopic gets the topic of a Conversation
 func (conv *Conversation) GetTopic() (name string, err error) {
-	return conv.element.GetAttribute("data-uie-value")
+
+	URL, err := conv.wireapp.webDriver.CurrentURL()
+	if err != nil {
+		return
+	}
+
+	if URL != "https://app.wire.com/" {
+		err = fmt.Errorf("Unexpected URL: '%s'", URL)
+		return
+	}
+
+	xpath := fmt.Sprintf("//div[@data-uie-uid='%s']", conv.uuid)
+	element, err := conv.wireapp.webDriver.FindElement("xpath", xpath)
+
+	if err != nil {
+		return
+	}
+
+	return element.GetAttribute("data-uie-value")
 }
 
 // SendMessage sends a message in a Conversation
 func (conv *Conversation) SendMessage(message string) (err error) {
-	element, err := conv.element.FindElement("xpath",
-		"//div[@class='conversation-list-cell-center']")
+
+	xpath := fmt.Sprintf("//div[@data-uie-uid='%s']", conv.uuid)
+	element, err := conv.wireapp.webDriver.FindElement("xpath", xpath)
 	if err != nil {
 		return
 	}
@@ -215,23 +235,39 @@ func (conv *Conversation) SendMessage(message string) (err error) {
 		return
 	}
 
-	textArea, err := waitForElementXPath(conv.wireapp.webDriver,
+	condition := func(wd selenium.WebDriver) (success bool, err error) {
+
+		xpath := fmt.Sprintf("//div[@data-uie-uid='%s' and "+
+			"contains(@class,'conversation-list-cell-active')]", conv.uuid)
+		element, err = conv.wireapp.webDriver.FindElement("xpath", xpath)
+		if err != nil {
+			log.Printf(err.Error())
+		}
+		return err == nil && element != nil, nil
+	}
+
+	err = conv.wireapp.webDriver.WaitWithTimeout(condition, 5*time.Second)
+	if err != nil {
+		return
+	}
+
+	element, err = waitForElementXPath(conv.wireapp.webDriver,
 		"//textarea[@id='conversation-input-bar-text']", 5*time.Second)
 	if err != nil {
 		return
 	}
 
-	err = textArea.Click()
+	err = element.Click()
 	if err != nil {
 		return
 	}
 
-	err = textArea.SendKeys(message)
+	err = element.SendKeys(message)
 	if err != nil {
 		return
 	}
 
-	err = textArea.SendKeys(selenium.EnterKey)
+	err = element.SendKeys(selenium.EnterKey)
 	if err != nil {
 		return
 	}
@@ -270,9 +306,11 @@ func (wa *WireApp) ListConversations() (
 	conversations = make([]*Conversation, len(elements))
 
 	for i, element := range elements {
-		conversations[i] = &Conversation{
-			element: element,
-			wireapp: wa}
+		conversations[i] = &Conversation{wireapp: wa}
+		conversations[i].uuid, err = element.GetAttribute("data-uie-uid")
+		if err != nil {
+			return
+		}
 	}
 
 	return conversations, nil
